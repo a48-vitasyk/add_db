@@ -8,8 +8,6 @@ log() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" | tee -a $LOG_FILE
 }
 
-sed -i 's/^#precedence ::ffff:0:0\/96  10/precedence ::ffff:0:0\/96  100/' /etc/gai.conf
-
 # Function to generate a random password
 generate_password() {
     tr -dc A-Za-z0-9 </dev/urandom | head -c 16
@@ -17,6 +15,7 @@ generate_password() {
 
 # Function to check for an existing container
 check_existing_container() {
+    sed -i 's/^#precedence ::ffff:0:0\/96  10/precedence ::ffff:0:0\/96  100/' /etc/gai.conf
     local db_version=$1
     if [ "$(docker ps -a --filter "name=${db_version}" --filter "label=zomro_add_db" --format '{{.Names}}')" ]; then
         log "Container named ${db_version} with the zomro_add_db flag is already running. Removing existing container..."
@@ -46,10 +45,12 @@ remove_hestia_mysql_config() {
     local hestia_config_file="/usr/local/hestia/conf/mysql.conf"
 
     if [ -f "$hestia_config_file" ]; then
+        # Create a backup of the HestiaCP MySQL config file
         cp "$hestia_config_file" "${hestia_config_file}.bak"
         log "Backup of HestiaCP MySQL configuration created: ${hestia_config_file}.bak"
 
-        # Точное удаление строки с идентификатором HOST
+        # Remove the line that corresponds to the database version from mysql.conf
+        # Matching the line with HOST value containing the db_version
         sed -i "/HOST='${db_version}'/d" "$hestia_config_file"
 
         log "Removed HestiaCP MySQL configuration entry for ${db_version}."
@@ -58,7 +59,9 @@ remove_hestia_mysql_config() {
     fi
 }
 
-# Function to remove the corresponding phpMyAdmin configuration entry
+
+
+# Function to remove the corresponding phpMyAdmin configuration file
 remove_phpmyadmin_config() {
     local db_version=$1
     local config_file="/etc/phpmyadmin/conf.d/01-${db_version}.php"
@@ -71,6 +74,27 @@ remove_phpmyadmin_config() {
     fi
 }
 
+
+
+
+## Function to remove the corresponding phpMyAdmin configuration entry
+#remove_phpmyadmin_config() {
+#    local db_version=$1
+#    local config_file="/etc/phpmyadmin/conf.d/01-localhost.php"
+#
+#    if [ -f "$config_file" ]; then
+#        # Create a backup of the configuration file before modifying it
+#        cp "$config_file" "${config_file}.bak"
+#        log "Backup of phpMyAdmin configuration created: ${config_file}.bak"
+#
+#        # Remove the corresponding server configuration for the database version
+#        sed -i "/\$cfg\['Servers'\].*\['host'\] = '${db_version}';/,/^\$cfg\['Servers'\].*\['host'\]/d" "$config_file"
+#
+#        log "Removed phpMyAdmin configuration entry for ${db_version}."
+#    else
+#        log "phpMyAdmin configuration file not found."
+#    fi
+#}
 
 # Function to check if Docker is installed
 check_docker_installed() {
@@ -89,87 +113,34 @@ check_docker_installed() {
 check_docker_compose_installed() {
     if ! command -v docker-compose &> /dev/null; then
         log "Docker Compose is not installed. Installing Docker Compose..."
-
-        # Определяем ОС и архитектуру
-        OS=$(uname -s | tr '[:upper:]' '[:lower:]')
-        ARCH=$(uname -m)
-
-        # Подгоняем архитектуру под ссылки GitHub
-        if [ "$ARCH" = "x86_64" ]; then
-            ARCH="x86_64"
-        elif [ "$ARCH" = "aarch64" ]; then
-            ARCH="aarch64"
-        else
-            log "Unsupported architecture: $ARCH"
-            exit 1
-        fi
-
-        # Ссылка на нужную версию Docker Compose
-        VERSION="v2.25.0"
-        DOCKER_COMPOSE_URL="https://github.com/docker/compose/releases/download/${VERSION}/docker-compose-${OS}-${ARCH}"
-
-        # Скачиваем и устанавливаем Docker Compose
-        curl -L "$DOCKER_COMPOSE_URL" -o /usr/local/bin/docker-compose
+        curl -L "https://github.com/docker/compose/releases/download/$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
         chmod +x /usr/local/bin/docker-compose
-
-        # Проверка установки
-        if command -v docker-compose &> /dev/null; then
-            log "Docker Compose installed successfully."
-        else
-            log "Failed to install Docker Compose."
-            exit 1
-        fi
     else
         log "Docker Compose is already installed."
     fi
 }
 
-
-# Function to add phpMyAdmin configuration for a specific database version
-add_phpmyadmin_config() {
-    local db_version=$1
-    local port=$2
-    local config_file="/etc/phpmyadmin/conf.d/01-${db_version}.php"
-
-    log "Creating phpMyAdmin configuration for ${db_version} on port ${port}..."
-    cat << EOF > "$config_file"
-<?php
-\$cfg['Servers'][\$i]['host'] = '${db_version}';
-\$cfg['Servers'][\$i]['port'] = '${port}';
-\$cfg['Servers'][\$i]['auth_type'] = 'cookie';
-\$cfg['Servers'][\$i]['verbose'] = '${db_version}';
-
-// Session termination settings
-\$cfg['LoginCookieValidity'] = 1440;
-\$cfg['LoginCookieStore'] = 0;
-\$cfg['ShowPhpInfo'] = true;
-
-// Interface additional settings
-\$cfg['ShowChgPassword'] = true;
-\$cfg['ShowDbStructureCharset'] = true;
-\$cfg['ShowDbStructureCreation'] = true;
-\$cfg['ShowDbStructureLastUpdate'] = true;
-\$cfg['ShowDbStructureLastCheck'] = true;
-
-// Memory and runtime settings
-\$cfg['MemoryLimit'] = '512M';
-\$cfg['ExecTimeLimit'] = 300;
-\$cfg['UploadDir'] = '';
-\$cfg['SaveDir'] = '';
-EOF
-
-    # root:www-data for config_file
-    chmod 640 "$config_file"
-    chown root:www-data "$config_file"
-
-    log "phpMyAdmin configuration for ${db_version} added at ${config_file}."
-}
-
 # Checking if Docker is installed
-check_docker_installed
+if ! command -v docker &> /dev/null; then
+    log "Docker is not installed. Installing Docker..."
+    curl -fsSL https://get.docker.com -o get-docker.sh
+    sh get-docker.sh
+    systemctl start docker
+    systemctl enable docker
+else
+    log "Docker is already installed."
+fi
 
 # Checking if Docker Compose is installed
-check_docker_compose_installed
+if ! command -v docker-compose &> /dev/null; then
+    log "Docker Compose is not installed. Installing Docker Compose..."
+    curl -SL https://github.com/docker/compose/releases/download/v2.25.0/docker-compose-linux-x86_64 -o /usr/local/bin/docker-compose
+    ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose
+    chmod +x /usr/local/bin/docker-compose
+    log "Docker Compose version $(docker-compose --version) successfully installed."
+else
+    log "Docker Compose is already installed."
+fi
 
 # Generate passwords
 MYSQL_ROOT_PASSWORD=$(generate_password)
@@ -181,6 +152,7 @@ echo "2) Remove an existing MySQL/MariaDB server"
 read -p "Enter the number corresponding to your choice: " action_choice
 
 if [ "$action_choice" -eq 1 ]; then
+    # Prompting the user to select a database version for installation
     log "Prompting the user to select a database version to install..."
     echo "Select the database version to install:"
     echo "1) MySQL 5.7"
@@ -222,13 +194,16 @@ if [ "$action_choice" -eq 1 ]; then
             ;;
     esac
 
+    # Check for an existing container with the zomro_add_db label
     check_existing_container $DB_VERSION
 
+    # Add unique hostname to /etc/hosts
     if ! grep -q "${DB_VERSION}" /etc/hosts; then
         echo "127.0.0.1 ${DB_VERSION}" >> /etc/hosts
         log "Added hostname ${DB_VERSION} to /etc/hosts"
     fi
 
+    # Create Docker Compose configuration
     log "Creating Docker Compose configuration..."
     AVAILABLE_PORT=3306
     while ss -tuln | grep -q ":$AVAILABLE_PORT"; do
@@ -236,7 +211,9 @@ if [ "$action_choice" -eq 1 ]; then
     done
     mkdir -p /root/docker_${DB_VERSION}
 
+    # Create init script and configuration for MySQL 8.0
     if [ "$DB_TYPE" = "mysql" ] && [ "$DB_VERSION" = "mysql-8.0" ]; then
+        # Create init script
         cat << EOF > /root/docker_${DB_VERSION}/init.sql
 ALTER USER 'root'@'localhost' IDENTIFIED BY '$MYSQL_ROOT_PASSWORD';
 CREATE USER IF NOT EXISTS 'root'@'%' IDENTIFIED BY '$MYSQL_ROOT_PASSWORD';
@@ -244,6 +221,7 @@ GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' WITH GRANT OPTION;
 FLUSH PRIVILEGES;
 EOF
 
+        # Create docker-compose.yml
         cat << EOF > /root/docker_${DB_VERSION}/docker-compose.yml
 services:
   ${DB_VERSION}:
@@ -263,6 +241,7 @@ services:
 EOF
 
     else
+        # Create init script for other versions
         if [ "$DB_TYPE" = "mysql" ]; then
             cat << EOF > /root/docker_${DB_VERSION}/init.sql
 ALTER USER 'root'@'%' IDENTIFIED WITH mysql_native_password BY '$MYSQL_ROOT_PASSWORD';
@@ -277,6 +256,7 @@ FLUSH PRIVILEGES;
 EOF
         fi
 
+        # Create docker-compose.yml
         cat << EOF > /root/docker_${DB_VERSION}/docker-compose.yml
 services:
   ${DB_VERSION}:
@@ -298,7 +278,9 @@ EOF
 
     fi
 
+    # Check if data directory exists and create backup
     if [ -d "/var/lib/${DB_VERSION}" ]; then
+        log "Data directory found. Creating backup..."
         BACKUP_DIR="/var/lib/${DB_VERSION}_backup_$(date +%Y%m%d%H%M%S)"
         mv /var/lib/${DB_VERSION} $BACKUP_DIR
         log "Backup created: ${BACKUP_DIR}"
@@ -306,11 +288,15 @@ EOF
         log "Data directory not found. Skipping backup creation."
     fi
 
+    # Remove existing data directory
+    log "Removing existing data directory..."
     rm -rf /var/lib/${DB_VERSION}
 
+    # Start the database using Docker Compose
     log "Starting Docker Compose for ${DB_VERSION}..."
     docker-compose -f /root/docker_${DB_VERSION}/docker-compose.yml up -d
 
+    # Wait for the database to be ready
     log "Waiting for the database to be ready..."
     RETRIES=30
     for i in $(seq 1 $RETRIES); do
@@ -322,20 +308,71 @@ EOF
             sleep 10
         fi
         if [ "$i" -eq "$RETRIES" ]; then
-            log "Failed to connect to the database after $RETRIES attempts."
+            log "Failed to connect to the database after $RETRIES attempts. Please check the Docker container logs for more information."
             exit 1
         fi
     done
 
+
+# Добавление вызова функции для создания конфигурации phpMyAdmin
+add_phpmyadmin_config "${DB_VERSION}" "${AVAILABLE_PORT}"
+
+    # Add database access to HestiaCP
     log "Adding database access to HestiaCP..."
     v-add-database-host mysql ${DB_VERSION} root $MYSQL_ROOT_PASSWORD '' '' '' $AVAILABLE_PORT
 
-    add_phpmyadmin_config "${DB_VERSION}" "${AVAILABLE_PORT}"
 
+# Function to add phpMyAdmin configuration for a specific database version
+add_phpmyadmin_config() {
+    local db_version=$1
+    local port=$2
+    local config_file="/etc/phpmyadmin/conf.d/01-${db_version}.php"
+
+    # Create the phpMyAdmin configuration file for the specific database
+    log "Creating phpMyAdmin configuration for ${db_version} on port ${port}..."
+    cat << EOF > "$config_file"
+<?php
+\$i++;
+\$cfg['Servers'][\$i]['host'] = '${db_version}';
+\$cfg['Servers'][\$i]['port'] = '${port}';
+\$cfg['Servers'][\$i]['auth_type'] = 'cookie';
+\$cfg['Servers'][\$i]['verbose'] = '${db_version}';
+
+// Session termination settings
+\$cfg['LoginCookieValidity'] = 1440;
+\$cfg['LoginCookieStore'] = 0;
+\$cfg['ShowPhpInfo'] = true;
+
+// Interface additional settings
+\$cfg['ShowChgPassword'] = true;
+\$cfg['ShowDbStructureCharset'] = true;
+\$cfg['ShowDbStructureCreation'] = true;
+\$cfg['ShowDbStructureLastUpdate'] = true;
+\$cfg['ShowDbStructureLastCheck'] = true;
+
+// Memory and runtime settings
+\$cfg['MemoryLimit'] = '512M';
+\$cfg['ExecTimeLimit'] = 300;
+\$cfg['UploadDir'] = '';
+\$cfg['SaveDir'] = '';
+EOF
+
+    log "phpMyAdmin configuration for ${db_version} added at ${config_file}."
+}
+
+
+    # Output access details in red color
     RED='\033[0;31m'
-    NC='\033[0m'
+    NC='\033[0m' # No Color
 
+    # Log access details
     log "Installation of ${DB_VERSION} server completed successfully."
+    log "Access details:"
+    log "Host: ${DB_VERSION}"
+    log "Port: $AVAILABLE_PORT"
+    log "User: root"
+    log "Password: $MYSQL_ROOT_PASSWORD"
+
     echo -e "${RED}"
     echo "==========================================="
     echo "            ACCESS DETAILS"
@@ -348,6 +385,7 @@ EOF
     echo -e "${NC}"
 
 elif [ "$action_choice" -eq 2 ]; then
+    # Prompting the user to select a database version for removal
     log "Prompting the user to select a database version to remove..."
     echo "Select the database version to remove:"
     echo "1) MySQL 5.7"
@@ -379,6 +417,7 @@ elif [ "$action_choice" -eq 2 ]; then
             ;;
     esac
 
+    # Call remove_container function to remove the selected database version
     remove_container $DB_VERSION
 
 else
