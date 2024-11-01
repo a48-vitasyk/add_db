@@ -49,7 +49,7 @@ remove_hestia_mysql_config() {
         cp "$hestia_config_file" "${hestia_config_file}.bak"
         log "Backup of HestiaCP MySQL configuration created: ${hestia_config_file}.bak"
 
-        # Точное удаление строки с идентификатором HOST
+        # Exact deletion of a line with the HOST identifier
         sed -i "/HOST='${db_version}'/d" "$hestia_config_file"
 
         log "Removed HestiaCP MySQL configuration entry for ${db_version}."
@@ -90,11 +90,10 @@ check_docker_compose_installed() {
     if ! command -v docker-compose &> /dev/null; then
         log "Docker Compose is not installed. Installing Docker Compose..."
 
-        # Определяем ОС и архитектуру
+
         OS=$(uname -s | tr '[:upper:]' '[:lower:]')
         ARCH=$(uname -m)
 
-        # Подгоняем архитектуру под ссылки GitHub
         if [ "$ARCH" = "x86_64" ]; then
             ARCH="x86_64"
         elif [ "$ARCH" = "aarch64" ]; then
@@ -104,15 +103,15 @@ check_docker_compose_installed() {
             exit 1
         fi
 
-        # Ссылка на нужную версию Docker Compose
+        # Link to the desired version of Docker Compose
         VERSION="v2.25.0"
         DOCKER_COMPOSE_URL="https://github.com/docker/compose/releases/download/${VERSION}/docker-compose-${OS}-${ARCH}"
 
-        # Скачиваем и устанавливаем Docker Compose
+        # Download and install Docker Compose
         curl -L "$DOCKER_COMPOSE_URL" -o /usr/local/bin/docker-compose
         chmod +x /usr/local/bin/docker-compose
 
-        # Проверка установки
+        # Checking the installation
         if command -v docker-compose &> /dev/null; then
             log "Docker Compose installed successfully."
         else
