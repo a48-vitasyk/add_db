@@ -336,6 +336,31 @@ main_menu() {
     done
 }
 
+# A function to check if the container exists and confirm deletion
+confirm_remove_container() {
+    local DB_VERSION=$1
+
+    if check_existing_container "$DB_VERSION"; then
+        echo "Container '${DB_VERSION}' exists."
+        
+        read -p "Are you sure you want to remove the container '${DB_VERSION}'? (yes/no): " confirm1
+        if [[ "$confirm1" =~ ^(yes|y|Yes|Y)$ ]]; then
+            read -p "This will permanently delete the container '${DB_VERSION}'. Are you sure? (yes/no): " confirm2
+            if [[ "$confirm2" =~ ^(yes|y|Yes|Y)$ ]]; then
+                remove_container "$DB_VERSION"
+                echo "Container '${DB_VERSION}' has been removed."
+            else
+                echo "Container '${DB_VERSION}' was not removed."
+                return 1  # Повертає false, щоб повернути до попереднього меню
+            fi
+        else
+            echo "Container '${DB_VERSION}' will not be removed."
+            return 1  # Повертає false, щоб повернути до попереднього меню
+        fi
+    fi
+}
+
+
 install_menu() {
     log "Prompting the user to select a database version to install..."
     while true; do
@@ -357,30 +382,35 @@ install_menu() {
                 DB_IMAGE="mysql:5.7.44-oraclelinux7"
                 DB_VERSION="mysql-5.7"
                 DB_TYPE="mysql"
+                confirm_remove_container "$DB_VERSION" || break
                 setup_database "$DB_IMAGE" "$DB_VERSION" "$DB_TYPE"
                 ;;
             2)
                 DB_IMAGE="mysql:8.0"
                 DB_VERSION="mysql-8.0"
                 DB_TYPE="mysql"
+                confirm_remove_container "$DB_VERSION" || break
                 setup_database "$DB_IMAGE" "$DB_VERSION" "$DB_TYPE"
                 ;;
             3)
                 DB_IMAGE="mariadb:10.8"
                 DB_VERSION="mariadb-10.8"
                 DB_TYPE="mariadb"
+                confirm_remove_container "$DB_VERSION" || break
                 setup_database "$DB_IMAGE" "$DB_VERSION" "$DB_TYPE"
                 ;;
             4)
                 DB_IMAGE="mariadb:10.9"
                 DB_VERSION="mariadb-10.9"
                 DB_TYPE="mariadb"
+                confirm_remove_container "$DB_VERSION" || break
                 setup_database "$DB_IMAGE" "$DB_VERSION" "$DB_TYPE"
                 ;;
             5)
                 DB_IMAGE="mariadb:10.11"
                 DB_VERSION="mariadb-10.11"
                 DB_TYPE="mariadb"
+                confirm_remove_container "$DB_VERSION" || break
                 setup_database "$DB_IMAGE" "$DB_VERSION" "$DB_TYPE"
                 ;;
             0)
