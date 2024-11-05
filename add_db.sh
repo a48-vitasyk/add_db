@@ -71,7 +71,6 @@ remove_phpmyadmin_config() {
     fi
 }
 
-
 # Function to check if Docker is installed
 check_docker_installed() {
     if ! command -v docker &>/dev/null; then
@@ -95,9 +94,8 @@ check_docker_installed() {
 
 # Function to check if Docker Compose is installed
 check_docker_compose_installed() {
-    if ! command -v docker-compose &> /dev/null; then
+    if ! command -v docker-compose &>/dev/null; then
         log "Docker Compose is not installed. Installing Docker Compose..."
-
 
         OS=$(uname -s | tr '[:upper:]' '[:lower:]')
         ARCH=$(uname -m)
@@ -120,7 +118,7 @@ check_docker_compose_installed() {
         chmod +x /usr/local/bin/docker-compose
 
         # Checking the installation
-        if command -v docker-compose &> /dev/null; then
+        if command -v docker-compose &>/dev/null; then
             log "Docker Compose installed successfully."
         else
             log "Failed to install Docker Compose."
@@ -131,7 +129,6 @@ check_docker_compose_installed() {
     fi
 }
 
-
 # Function to add phpMyAdmin configuration for a specific database version
 add_phpmyadmin_config() {
     local db_version=$1
@@ -139,7 +136,7 @@ add_phpmyadmin_config() {
     local config_file="/etc/phpmyadmin/conf.d/01-${db_version}.php"
 
     log "Creating phpMyAdmin configuration for ${db_version} on port ${port}..."
-    cat << EOF > "$config_file"
+    cat <<EOF >"$config_file"
 <?php
 \$cfg['Servers'][\$i]['host'] = '${db_version}';
 \$cfg['Servers'][\$i]['port'] = '${port}';
@@ -172,73 +169,17 @@ EOF
     log "phpMyAdmin configuration for ${db_version} added at ${config_file}."
 }
 
-# Checking if Docker is installed
-check_docker_installed
+setup_database() {
+    local DB_IMAGE=$1
+    local DB_VERSION=$2
+    local DB_TYPE=$3
 
-# Checking if Docker Compose is installed
-check_docker_compose_installed
+    clear
+    check_existing_container "$DB_VERSION"
+    clear
 
-# Generate passwords
-MYSQL_ROOT_PASSWORD=$(generate_password)
-clear
-# Prompting the user to select an action
-echo "Select an action:"
-echo ""
-echo "1) Install a MySQL/MariaDB server"
-echo "2) Remove an existing MySQL/MariaDB server"
-echo ""
-read -p "Enter the number corresponding to your choice: " action_choice
-
-clear
-
-if [ "$action_choice" -eq 1 ]; then
-    log "Prompting the user to select a database version to install..."
-    echo "Select the database version to install:"
-    echo ""
-    echo "1) MySQL 5.7"
-    echo "2) MySQL 8.0"
-    echo "3) MariaDB 10.8"
-    echo "4) MariaDB 10.9"
-    echo "5) MariaDB 10.11"
-    echo ""
-    read -p "Enter the number corresponding to your choice: " db_choice
-
-    case $db_choice in
-        1)
-            DB_IMAGE="mysql:5.7.44-oraclelinux7"
-            DB_VERSION="mysql-5.7"
-            DB_TYPE="mysql"
-            ;;
-        2)
-            DB_IMAGE="mysql:8.0"
-            DB_VERSION="mysql-8.0"
-            DB_TYPE="mysql"
-            ;;
-        3)
-            DB_IMAGE="mariadb:10.8"
-            DB_VERSION="mariadb-10.8"
-            DB_TYPE="mariadb"
-            ;;
-        4)
-            DB_IMAGE="mariadb:10.9"
-            DB_VERSION="mariadb-10.9"
-            DB_TYPE="mariadb"
-            ;;
-        5)
-            DB_IMAGE="mariadb:10.11"
-            DB_VERSION="mariadb-10.11"
-            DB_TYPE="mariadb"
-            ;;
-        *)
-            log "Invalid choice. Installation aborted."
-            exit 1
-            ;;
-    esac
-clear
-    check_existing_container $DB_VERSION
-clear
     if ! grep -q "${DB_VERSION}" /etc/hosts; then
-        echo "127.0.0.1 ${DB_VERSION}" >> /etc/hosts
+        echo "127.0.0.1 ${DB_VERSION}" >>/etc/hosts
         log "Added hostname ${DB_VERSION} to /etc/hosts"
     fi
 
@@ -250,14 +191,14 @@ clear
     mkdir -p /root/docker_${DB_VERSION}
 
     if [ "$DB_TYPE" = "mysql" ] && [ "$DB_VERSION" = "mysql-8.0" ]; then
-        cat << EOF > /root/docker_${DB_VERSION}/init.sql
+        cat <<EOF >/root/docker_${DB_VERSION}/init.sql
 ALTER USER 'root'@'localhost' IDENTIFIED BY '$MYSQL_ROOT_PASSWORD';
 CREATE USER IF NOT EXISTS 'root'@'%' IDENTIFIED BY '$MYSQL_ROOT_PASSWORD';
 GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' WITH GRANT OPTION;
 FLUSH PRIVILEGES;
 EOF
 
-        cat << EOF > /root/docker_${DB_VERSION}/docker-compose.yml
+        cat <<EOF >/root/docker_${DB_VERSION}/docker-compose.yml
 services:
   ${DB_VERSION}:
     image: $DB_IMAGE
@@ -277,20 +218,20 @@ EOF
 
     else
         if [ "$DB_TYPE" = "mysql" ]; then
-            cat << EOF > /root/docker_${DB_VERSION}/init.sql
+            cat <<EOF >/root/docker_${DB_VERSION}/init.sql
 ALTER USER 'root'@'%' IDENTIFIED WITH mysql_native_password BY '$MYSQL_ROOT_PASSWORD';
 GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' WITH GRANT OPTION;
 FLUSH PRIVILEGES;
 EOF
         elif [ "$DB_TYPE" = "mariadb" ]; then
-            cat << EOF > /root/docker_${DB_VERSION}/init.sql
+            cat <<EOF >/root/docker_${DB_VERSION}/init.sql
 CREATE OR REPLACE USER 'root'@'%' IDENTIFIED BY '$MYSQL_ROOT_PASSWORD';
 GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' WITH GRANT OPTION;
 FLUSH PRIVILEGES;
 EOF
         fi
 
-        cat << EOF > /root/docker_${DB_VERSION}/docker-compose.yml
+        cat <<EOF >/root/docker_${DB_VERSION}/docker-compose.yml
 services:
   ${DB_VERSION}:
     image: $DB_IMAGE
@@ -313,7 +254,7 @@ EOF
 
     if [ -d "/var/lib/${DB_VERSION}" ]; then
         BACKUP_DIR="/var/lib/${DB_VERSION}_backup_$(date +%Y%m%d%H%M%S)"
-        mv /var/lib/${DB_VERSION} $BACKUP_DIR
+        mv /var/lib/${DB_VERSION} "$BACKUP_DIR"
         log "Backup created: ${BACKUP_DIR}"
     else
         log "Data directory not found. Skipping backup creation."
@@ -331,7 +272,7 @@ EOF
             log "Database is ready."
             break
         else
-            log "Database is not ready yet. Retrying in 5 seconds..."
+            log "Database is not ready yet. Retrying in 10 seconds..."
             sleep 10
         fi
         if [ "$i" -eq "$RETRIES" ]; then
@@ -347,60 +288,168 @@ EOF
 
     RED='\033[0;31m'
     NC='\033[0m'
-clear
+    clear
     log "Installation of ${DB_VERSION} server completed successfully."
     echo ""
     echo -e "${RED}"
     echo "==========================================="
     echo "            ACCESS DETAILS"
     echo "-------------------------------------------"
-    echo "Host: ${DB_VERSION}"
+    echo "Host: 127.0.0.1 or localhost"
     echo "Port: $AVAILABLE_PORT"
     echo "User: root"
     echo "Password: $MYSQL_ROOT_PASSWORD"
     echo "==========================================="
+    echo "To check, use the command: mysql -h 127.0.0.1 -P $AVAILABLE_PORT -u root -p"
+    echo "Or: docker exec -it $DB_VERSION mysql -u root -p"
     echo -e "${NC}"
-
-elif [ "$action_choice" -eq 2 ]; then
-    log "Prompting the user to select a database version to remove..."
-    echo ""
-    echo "Select the database version to remove:"
-    echo ""
-    echo "1) MySQL 5.7"
-    echo "2) MySQL 8.0"
-    echo "3) MariaDB 10.8"
-    echo "4) MariaDB 10.9"
-    echo "5) MariaDB 10.11"
-    echo ""
-    read -p "Enter the number corresponding to your choice: " db_remove_choice
-
-    case $db_remove_choice in
-        1)
-            DB_VERSION="mysql-5.7"
-            ;;
-        2)
-            DB_VERSION="mysql-8.0"
-            ;;
-        3)
-            DB_VERSION="mariadb-10.8"
-            ;;
-        4)
-            DB_VERSION="mariadb-10.9"
-            ;;
-        5)
-            DB_VERSION="mariadb-10.11"
-            ;;
-        *)
-            log "Invalid choice. Removal aborted."
-            exit 1
-            ;;
-    esac
-clear
-    remove_container $DB_VERSION
-
-else
-    log "Invalid action. Exiting."
     exit 1
-fi
+}
 
-exit 0
+main_menu() {
+    while true; do
+        clear
+        echo "Select an action:"
+        echo ""
+        echo "1) Install a MySQL/MariaDB server"
+        echo "2) Remove an existing MySQL/MariaDB server"
+        echo "0) Exit"
+        echo ""
+
+        read -p "Enter the number corresponding to your choice: " action_choice
+
+        case $action_choice in
+            1)
+                install_menu
+                ;;
+            2)
+                remove_menu
+                ;;
+            0)
+                log "Exiting the script."
+                exit 0
+                ;;
+            *)
+                echo "Invalid choice. Please enter a valid number."
+                ;;
+        esac
+    done
+}
+
+install_menu() {
+    log "Prompting the user to select a database version to install..."
+    while true; do
+        clear
+        echo "Select the database version to install:"
+        echo ""
+        echo "1) MySQL 5.7"
+        echo "2) MySQL 8.0"
+        echo "3) MariaDB 10.8"
+        echo "4) MariaDB 10.9"
+        echo "5) MariaDB 10.11"
+        echo "0) Return to the main menu"
+        echo ""
+
+        read -p "Enter the number corresponding to your choice: " db_choice
+
+        case $db_choice in
+            1)
+                DB_IMAGE="mysql:5.7.44-oraclelinux7"
+                DB_VERSION="mysql-5.7"
+                DB_TYPE="mysql"
+                setup_database "$DB_IMAGE" "$DB_VERSION" "$DB_TYPE"
+                ;;
+            2)
+                DB_IMAGE="mysql:8.0"
+                DB_VERSION="mysql-8.0"
+                DB_TYPE="mysql"
+                setup_database "$DB_IMAGE" "$DB_VERSION" "$DB_TYPE"
+                ;;
+            3)
+                DB_IMAGE="mariadb:10.8"
+                DB_VERSION="mariadb-10.8"
+                DB_TYPE="mariadb"
+                setup_database "$DB_IMAGE" "$DB_VERSION" "$DB_TYPE"
+                ;;
+            4)
+                DB_IMAGE="mariadb:10.9"
+                DB_VERSION="mariadb-10.9"
+                DB_TYPE="mariadb"
+                setup_database "$DB_IMAGE" "$DB_VERSION" "$DB_TYPE"
+                ;;
+            5)
+                DB_IMAGE="mariadb:10.11"
+                DB_VERSION="mariadb-10.11"
+                DB_TYPE="mariadb"
+                setup_database "$DB_IMAGE" "$DB_VERSION" "$DB_TYPE"
+                ;;
+            0)
+                log "Returning to the main menu..."
+                return
+                ;;
+            *)
+                echo "Invalid choice. Please enter a valid number."
+                ;;
+        esac
+    done
+}
+
+remove_menu() {
+    log "Prompting the user to select a database version to remove..."
+    while true; do
+        clear
+        echo "Select the database version to remove:"
+        echo ""
+        echo "1) MySQL 5.7"
+        echo "2) MySQL 8.0"
+        echo "3) MariaDB 10.8"
+        echo "4) MariaDB 10.9"
+        echo "5) MariaDB 10.11"
+        echo "0) Return to the main menu"
+        echo ""
+
+        read -p "Enter the number corresponding to your choice: " db_remove_choice
+
+        case $db_remove_choice in
+            1)
+                DB_VERSION="mysql-5.7"
+                remove_container "$DB_VERSION"
+                ;;
+            2)
+                DB_VERSION="mysql-8.0"
+                remove_container "$DB_VERSION"
+                ;;
+            3)
+                DB_VERSION="mariadb-10.8"
+                remove_container "$DB_VERSION"
+                ;;
+            4)
+                DB_VERSION="mariadb-10.9"
+                remove_container "$DB_VERSION"
+                ;;
+            5)
+                DB_VERSION="mariadb-10.11"
+                remove_container "$DB_VERSION"
+                ;;
+            0)
+                log "Returning to the main menu..."
+                return
+                ;;
+            *)
+                log "Invalid choice. Removal aborted."
+                ;;
+        esac
+    done
+}
+
+# Checking if Docker is installed
+check_docker_installed
+
+# Checking if Docker Compose is installed
+check_docker_compose_installed
+
+# Generate passwords
+MYSQL_ROOT_PASSWORD=$(generate_password)
+clear
+# Call up the main menu
+main_menu
