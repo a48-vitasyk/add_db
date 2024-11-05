@@ -136,7 +136,7 @@ add_phpmyadmin_config() {
     local config_file="/etc/phpmyadmin/conf.d/01-${db_version}.php"
 
     log "Creating phpMyAdmin configuration for ${db_version} on port ${port}..."
-    cat << EOF >"$config_file"
+    cat << EOF > "$config_file"
 <?php
 \$cfg['Servers'][\$i]['host'] = '${db_version}';
 \$cfg['Servers'][\$i]['port'] = '${port}';
@@ -191,14 +191,14 @@ setup_database() {
     mkdir -p /root/docker_${DB_VERSION}
 
     if [ "$DB_TYPE" = "mysql" ] && [ "$DB_VERSION" = "mysql-8.0" ]; then
-        cat << EOF >/root/docker_${DB_VERSION}/init.sql
+        cat << EOF > /root/docker_${DB_VERSION}/init.sql
 ALTER USER 'root'@'localhost' IDENTIFIED BY '$MYSQL_ROOT_PASSWORD';
 CREATE USER IF NOT EXISTS 'root'@'%' IDENTIFIED BY '$MYSQL_ROOT_PASSWORD';
 GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' WITH GRANT OPTION;
 FLUSH PRIVILEGES;
 EOF
 
-        cat << EOF >/root/docker_${DB_VERSION}/docker-compose.yml
+        cat << EOF > /root/docker_${DB_VERSION}/docker-compose.yml
 services:
   ${DB_VERSION}:
     image: $DB_IMAGE
@@ -218,20 +218,20 @@ EOF
 
     else
         if [ "$DB_TYPE" = "mysql" ]; then
-            cat << EOF >/root/docker_${DB_VERSION}/init.sql
+            cat << EOF > /root/docker_${DB_VERSION}/init.sql
 ALTER USER 'root'@'%' IDENTIFIED WITH mysql_native_password BY '$MYSQL_ROOT_PASSWORD';
 GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' WITH GRANT OPTION;
 FLUSH PRIVILEGES;
 EOF
         elif [ "$DB_TYPE" = "mariadb" ]; then
-            cat << EOF >/root/docker_${DB_VERSION}/init.sql
+            cat << EOF > /root/docker_${DB_VERSION}/init.sql
 CREATE OR REPLACE USER 'root'@'%' IDENTIFIED BY '$MYSQL_ROOT_PASSWORD';
 GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' WITH GRANT OPTION;
 FLUSH PRIVILEGES;
 EOF
         fi
 
-        cat << EOF >/root/docker_${DB_VERSION}/docker-compose.yml
+        cat << EOF > /root/docker_${DB_VERSION}/docker-compose.yml
 services:
   ${DB_VERSION}:
     image: $DB_IMAGE
