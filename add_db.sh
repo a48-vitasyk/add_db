@@ -172,21 +172,27 @@ check_docker_compose_installed
 
 # Generate passwords
 MYSQL_ROOT_PASSWORD=$(generate_password)
-
+clear
 # Prompting the user to select an action
 echo "Select an action:"
+echo ""
 echo "1) Install a MySQL/MariaDB server"
 echo "2) Remove an existing MySQL/MariaDB server"
+echo ""
 read -p "Enter the number corresponding to your choice: " action_choice
+
+clear
 
 if [ "$action_choice" -eq 1 ]; then
     log "Prompting the user to select a database version to install..."
     echo "Select the database version to install:"
+    echo ""
     echo "1) MySQL 5.7"
     echo "2) MySQL 8.0"
     echo "3) MariaDB 10.8"
     echo "4) MariaDB 10.9"
     echo "5) MariaDB 10.11"
+    echo ""
     read -p "Enter the number corresponding to your choice: " db_choice
 
     case $db_choice in
@@ -220,9 +226,9 @@ if [ "$action_choice" -eq 1 ]; then
             exit 1
             ;;
     esac
-
+clear
     check_existing_container $DB_VERSION
-
+clear
     if ! grep -q "${DB_VERSION}" /etc/hosts; then
         echo "127.0.0.1 ${DB_VERSION}" >> /etc/hosts
         log "Added hostname ${DB_VERSION} to /etc/hosts"
@@ -333,8 +339,9 @@ EOF
 
     RED='\033[0;31m'
     NC='\033[0m'
-
+clear
     log "Installation of ${DB_VERSION} server completed successfully."
+    echo ""
     echo -e "${RED}"
     echo "==========================================="
     echo "            ACCESS DETAILS"
@@ -348,12 +355,15 @@ EOF
 
 elif [ "$action_choice" -eq 2 ]; then
     log "Prompting the user to select a database version to remove..."
+    echo ""
     echo "Select the database version to remove:"
+    echo ""
     echo "1) MySQL 5.7"
     echo "2) MySQL 8.0"
     echo "3) MariaDB 10.8"
     echo "4) MariaDB 10.9"
     echo "5) MariaDB 10.11"
+    echo ""
     read -p "Enter the number corresponding to your choice: " db_remove_choice
 
     case $db_remove_choice in
@@ -377,7 +387,7 @@ elif [ "$action_choice" -eq 2 ]; then
             exit 1
             ;;
     esac
-
+clear
     remove_container $DB_VERSION
 
 else
