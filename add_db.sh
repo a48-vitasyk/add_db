@@ -74,14 +74,22 @@ remove_phpmyadmin_config() {
 
 # Function to check if Docker is installed
 check_docker_installed() {
-    if ! command -v docker &> /dev/null; then
-        log "Docker is not installed. Installing Docker..."
-        curl -fsSL https://get.docker.com -o get-docker.sh
-        sh get-docker.sh
-        systemctl start docker
-        systemctl enable docker
+    if ! command -v docker &>/dev/null; then
+        echo "Docker is not installed."
+        read -p "Would you like to install Docker? (yes/No): " install_docker
+        if [[ "$install_docker" =~ ^(yes|Yes|y|Y)$ ]]; then
+            echo "Installing Docker..."
+            curl -fsSL https://get.docker.com -o get-docker.sh
+            sh get-docker.sh
+            systemctl start docker
+            systemctl enable docker
+            echo "Docker has been installed and started."
+        else
+            echo "Docker installation canceled."
+            return 1
+        fi
     else
-        log "Docker is already installed."
+        echo "Docker is already installed."
     fi
 }
 
